@@ -1,0 +1,14 @@
+{
+  "name": "maestro",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Thoroughness-first Claude Code plugin",
+  "author": "jbj338033",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0"
+  }
+}
