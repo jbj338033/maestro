@@ -5,6 +5,9 @@
   "description": "Thoroughness-first Claude Code plugin",
   "author": "jbj338033",
   "license": "MIT",
+  "scripts": {
+    "test": "node --test test/**/*.test.mjs"
+  },
   "engines": {
     "node": ">=22.0.0"
   },
