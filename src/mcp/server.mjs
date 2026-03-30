@@ -120,6 +120,27 @@ const TOOLS = [
         limit: { type: 'number', description: 'Max entries to return (default: 10)' }
       }
     }
+  },
+  {
+    name: 'mission_create',
+    description: 'Create a new mission with objective and acceptance criteria',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objective: { type: 'string', description: 'Mission objective' },
+        criteria: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of acceptance criteria descriptions'
+        },
+        complexity: {
+          type: 'string',
+          enum: ['low', 'medium', 'high'],
+          description: 'Task complexity level (default: medium)'
+        }
+      },
+      required: ['objective', 'criteria']
+    }
   }
 ];
 
@@ -169,6 +190,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const met = mission.acceptance_criteria.filter(c => c.verified).length;
         const total = mission.acceptance_criteria.length;
         return { content: [{ type: 'text', text: `Criterion ${args.criteria_id} → ${args.verified ? 'VERIFIED' : 'UNVERIFIED'}. Progress: ${met}/${total}` }] };
+      }
+
+      case 'mission_create': {
+        const existing = readJson('mission.json');
+        if (existing?.objective) {
+          return { content: [{ type: 'text', text: `Mission already exists: "${existing.objective}". Clear it first via state_write.` }], isError: true };
+        }
+        const mission = {
+          version: 1,
+          objective: args.objective,
+          acceptance_criteria: (args.criteria || []).map((desc, i) => ({
+            id: i, description: desc, verified: false
+          })),
+          constraints: [],
+          created_at: new Date().toISOString(),
+          complexity: args.complexity || 'medium'
+        };
+        writeJson('mission.json', mission);
+        return { content: [{ type: 'text', text: `Mission created: "${args.objective}" with ${mission.acceptance_criteria.length} criteria.` }] };
       }
 
       case 'memory_read': {
