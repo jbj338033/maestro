@@ -122,6 +122,22 @@ const TOOLS = [
     }
   },
   {
+    name: 'memory_search',
+    description: 'Search cross-session memory by keyword. Returns matching entries across all or a specific memory type.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Keyword to search for (case-insensitive substring match)' },
+        type: {
+          type: 'string',
+          enum: ['conventions', 'decisions', 'patterns'],
+          description: 'Memory type to search. Omit to search all.'
+        }
+      },
+      required: ['query']
+    }
+  },
+  {
     name: 'mission_create',
     description: 'Create a new mission with objective and acceptance criteria',
     inputSchema: {
@@ -244,6 +260,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return { content: [{ type: 'text', text: 'No session history yet.' }] };
         }
         return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
+      }
+
+      case 'memory_search': {
+        const q = (args.query || '').toLowerCase();
+        if (!q) {
+          return { content: [{ type: 'text', text: 'query is required' }], isError: true };
+        }
+        const types = args?.type ? [args.type] : ['conventions', 'decisions', 'patterns'];
+        const results = {};
+        for (const t of types) {
+          const memory = readJson(`memory/${t}.json`, { entries: [] });
+          const matches = memory.entries.filter(e => {
+            const str = JSON.stringify(e).toLowerCase();
+            return str.includes(q);
+          });
+          if (matches.length > 0) results[t] = matches;
+        }
+        if (Object.keys(results).length === 0) {
+          return { content: [{ type: 'text', text: `No results for "${args.query}".` }] };
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
       }
 
       case 'memory_write': {
