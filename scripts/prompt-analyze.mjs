@@ -41,14 +41,14 @@ const complexity = (matchCount >= 2 || fileCount >= 5) ? 'high' : 'medium';
 const objective = prompt.slice(0, 200);
 const criteria = [];
 
-if (/test|테스트/i.test(prompt)) criteria.push('관련 테스트가 통과해야 함');
-if (/build|빌드/i.test(prompt)) criteria.push('빌드가 성공해야 함');
-criteria.push('구현이 요청 사항과 일치해야 함');
-if (complexity === 'high') criteria.push('기존 기능에 대한 회귀가 없어야 함');
+if (/test|테스트/i.test(prompt)) criteria.push('relevant tests must pass');
+if (/build|빌드/i.test(prompt)) criteria.push('build must succeed');
+criteria.push('implementation matches the request');
+if (complexity === 'high') criteria.push('no regressions in existing functionality');
 
 createMission(objective, criteria, [], complexity);
 
 const output = {
-  systemMessage: `[Maestro] 미션이 자동 생성되었습니다 (complexity: ${complexity}).\n목표: ${objective}\n수용 기준 ${criteria.length}개. mcp__maestro__mission_read로 확인하세요.`
+  systemMessage: `[Maestro] mission auto-generated (complexity: ${complexity}).\nobjective: ${objective}\n${criteria.length} acceptance criteria. use mcp__maestro__mission_read to review.`
 };
 process.stdout.write(JSON.stringify(output));

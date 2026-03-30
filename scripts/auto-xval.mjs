@@ -15,6 +15,6 @@ const threshold = parseInt(process.env.MAESTRO_XVAL_THRESHOLD || '5', 10);
 if (modCount < threshold || session.external_models_consulted) process.exit(0);
 
 const output = {
-  systemMessage: `[Maestro] ${modCount}개 파일이 수정되었지만 외부 모델을 확인하지 않았습니다. codex-bridge 또는 gemini-bridge 에이전트로 교차 검증을 고려하세요.`
+  systemMessage: `[Maestro] ${modCount} files modified without external model consultation. consider cross-validating with codex-bridge or gemini-bridge.`
 };
 process.stdout.write(JSON.stringify(output));

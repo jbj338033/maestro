@@ -67,20 +67,20 @@ const modCount = session.modified_files?.length || 0;
 const reminders = [];
 
 if (modCount === 5) {
-  reminders.push(`[Maestro] ${modCount}개 파일이 수정되었습니다. 테스트를 실행하고, codex-bridge 또는 gemini-bridge로 교차 검증을 고려하세요.`);
+  reminders.push(`[Maestro] ${modCount} files modified. consider running tests and cross-validating with codex-bridge or gemini-bridge.`);
 }
 
 if (modCount === 10) {
-  reminders.push(`[Maestro] ${modCount}개 파일이 수정되었습니다. critic 에이전트로 심층 리뷰를 강력히 추천합니다.`);
+  reminders.push(`[Maestro] ${modCount} files modified. strongly recommend running critic agent for a deep review.`);
 }
 
 // remind about failed tests/builds
 const v = session.verification;
 if (v.tests_passed === false) {
-  reminders.push('[Maestro] 테스트가 실패했습니다. 수정 후 다시 실행하세요.');
+  reminders.push('[Maestro] tests failed. fix and re-run before completing.');
 }
 if (v.build_passed === false) {
-  reminders.push('[Maestro] 빌드가 실패했습니다. 에러를 확인하세요.');
+  reminders.push('[Maestro] build failed. check errors before completing.');
 }
 
 if (reminders.length > 0) {

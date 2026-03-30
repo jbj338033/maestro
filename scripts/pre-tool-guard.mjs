@@ -17,14 +17,14 @@ const isWrite = ['Write', 'Edit'].includes(toolName);
 
 // warn on first write without any reads
 if (isWrite && counts.read === 0) {
-  warnings.push('[Maestro] 아직 파일을 읽지 않았는데 쓰기를 시도합니다. 관련 파일을 먼저 읽으세요.');
+  warnings.push('[Maestro] attempting to write without reading any files first. read related files before writing.');
 }
 
 // warn on high write:read ratio
 if (isWrite && counts.write > 0 && counts.read > 0) {
   const ratio = counts.write / counts.read;
   if (ratio >= 3) {
-    warnings.push(`[Maestro] Write:Read 비율이 ${ratio.toFixed(1)}:1입니다. 읽기를 더 하고 검증하세요.`);
+    warnings.push(`[Maestro] write:read ratio is ${ratio.toFixed(1)}:1. read more files and verify before continuing.`);
   }
 }
 
@@ -33,25 +33,25 @@ if (toolName === 'Bash') {
   const cmd = toolInput.command || '';
 
   if (/git\s+add\s+(-A|\.)\s*$/i.test(cmd)) {
-    warnings.push('[Maestro] git add -A는 위험합니다. git status로 먼저 확인하세요.');
+    warnings.push('[Maestro] git add -A is dangerous. run git status first to review changes.');
   }
   if (/git\s+push\s+.*--force/i.test(cmd) || /git\s+push\s+-f\b/i.test(cmd)) {
-    warnings.push('[Maestro] force push 감지. 원격 브랜치를 덮어쓸 수 있습니다.');
+    warnings.push('[Maestro] force push detected. this may overwrite remote branch history.');
   }
   if (/git\s+reset\s+--hard/i.test(cmd)) {
-    warnings.push('[Maestro] git reset --hard 감지. 커밋되지 않은 변경이 모두 사라집니다.');
+    warnings.push('[Maestro] git reset --hard detected. all uncommitted changes will be lost.');
   }
   if (/git\s+checkout\s+\.\s*$/i.test(cmd) || /git\s+restore\s+\.\s*$/i.test(cmd)) {
-    warnings.push('[Maestro] 모든 변경 취소 명령 감지. 작업 중인 변경이 사라질 수 있습니다.');
+    warnings.push('[Maestro] discard-all detected. in-progress changes may be lost.');
   }
   if (/rm\s+-rf?\s+/i.test(cmd) && !/node_modules|dist|build|\.maestro|\.next|target/i.test(cmd)) {
-    warnings.push('[Maestro] rm -rf 감지. 정말 삭제할 대상이 맞는지 확인하세요.');
+    warnings.push('[Maestro] rm -rf detected. verify the target is correct.');
   }
   if (/\benv\b|\bprintenv\b|echo\s+\$\w*(KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)/i.test(cmd)) {
-    warnings.push('[Maestro] 환경변수/시크릿 노출 가능성. 출력이 컨텍스트에 포함됩니다.');
+    warnings.push('[Maestro] possible secret/env exposure. output will be included in context.');
   }
   if (/--no-verify/i.test(cmd)) {
-    warnings.push('[Maestro] --no-verify 감지. git hook을 건너뛰면 검증이 누락됩니다.');
+    warnings.push('[Maestro] --no-verify detected. skipping git hooks bypasses validation.');
   }
 }
 

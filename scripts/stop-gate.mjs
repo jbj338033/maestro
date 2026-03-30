@@ -25,22 +25,22 @@ const reasons = [];
 
 // check: were tests run?
 if (!session.verification.tests_run) {
-  reasons.push(`${modCount}개 파일을 수정했지만 테스트를 실행하지 않았습니다.`);
+  reasons.push(`modified ${modCount} files but tests were not run.`);
 }
 
 // check: did tests pass?
 if (session.verification.tests_run && session.verification.tests_passed === false) {
-  reasons.push('테스트가 실패한 상태입니다. 수정 후 다시 실행하세요.');
+  reasons.push('tests are failing. fix and re-run before completing.');
 }
 
 // check: was build run? (only if 3+ files modified)
 if (!session.verification.build_run && modCount >= 3) {
-  reasons.push('3개 이상 파일을 수정했지만 빌드를 확인하지 않았습니다.');
+  reasons.push('modified 3+ files but build was not verified.');
 }
 
 // check: did build pass?
 if (session.verification.build_run && session.verification.build_passed === false) {
-  reasons.push('빌드가 실패한 상태입니다. 에러를 확인하세요.');
+  reasons.push('build is failing. check errors before completing.');
 }
 
 if (reasons.length === 0) process.exit(0);
@@ -51,6 +51,6 @@ updateState('session.json', (s) => {
   return s;
 });
 
-const message = `[Maestro] 완료 전 검증이 필요합니다:\n- ${reasons.join('\n- ')}\n\n테스트와 빌드를 실행한 후 다시 시도하세요.`;
+const message = `[Maestro] verification required before completing:\n- ${reasons.join('\n- ')}\n\nrun tests and build, then try again.`;
 process.stderr.write(message);
 process.exit(2);

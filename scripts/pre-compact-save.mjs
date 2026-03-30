@@ -14,12 +14,12 @@ const parts = [];
 if (mission && mission.objective) {
   const metCount = mission.acceptance_criteria.filter(c => c.verified).length;
   const totalCount = mission.acceptance_criteria.length;
-  parts.push(`미션: ${mission.objective}`);
-  parts.push(`수용 기준: ${metCount}/${totalCount} 충족`);
+  parts.push(`mission: ${mission.objective}`);
+  parts.push(`criteria: ${metCount}/${totalCount} met`);
 
   const unmet = mission.acceptance_criteria.filter(c => !c.verified);
   if (unmet.length > 0) {
-    parts.push('미충족 기준:');
+    parts.push('unmet criteria:');
     unmet.forEach(c => parts.push(`  - ${c.description}`));
   }
 }
@@ -27,9 +27,9 @@ if (mission && mission.objective) {
 if (session) {
   const modCount = session.modified_files?.length || 0;
   if (modCount > 0) {
-    parts.push(`수정된 파일 (${modCount}개): ${session.modified_files.slice(0, 10).join(', ')}${modCount > 10 ? '...' : ''}`);
+    parts.push(`modified files (${modCount}): ${session.modified_files.slice(0, 10).join(', ')}${modCount > 10 ? '...' : ''}`);
   }
-  parts.push(`검증 상태: 테스트 ${session.verification.tests_run ? '실행됨' : '미실행'}, 빌드 ${session.verification.build_run ? '실행됨' : '미실행'}`);
+  parts.push(`verification: tests ${session.verification.tests_run ? 'run' : 'not run'}, build ${session.verification.build_run ? 'run' : 'not run'}`);
 }
 
 const summary = parts.join('\n');
@@ -52,6 +52,6 @@ if (session) {
 
 // inject summary into context so it survives compaction
 if (summary) {
-  const output = { systemMessage: `[Maestro] 컨텍스트 압축 전 상태 저장됨:\n${summary}` };
+  const output = { systemMessage: `[Maestro] state saved before context compaction:\n${summary}` };
   process.stdout.write(JSON.stringify(output));
 }

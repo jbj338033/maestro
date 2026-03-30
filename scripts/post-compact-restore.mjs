@@ -8,6 +8,6 @@ const compactState = readState('compact-state.json');
 if (!compactState || !compactState.summary) process.exit(0);
 
 const output = {
-  systemMessage: `[Maestro] 컨텍스트 압축 후 복원됨:\n${compactState.summary}\n\n현재 상태를 확인하려면 mcp__maestro__state_read 또는 mcp__maestro__mission_read를 사용하세요.`
+  systemMessage: `[Maestro] state restored after compaction:\n${compactState.summary}\n\nuse mcp__maestro__state_read or mcp__maestro__mission_read to inspect current state.`
 };
 process.stdout.write(JSON.stringify(output));
