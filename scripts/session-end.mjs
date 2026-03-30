@@ -11,7 +11,7 @@ if (!session) process.exit(0);
 
 const mission = readMission();
 
-// save session history
+// --- save session history ---
 const historyEntry = {
   session_id: session.session_id,
   started_at: session.started_at,
@@ -29,25 +29,50 @@ const historyEntry = {
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 writeState(`history/${timestamp}.json`, historyEntry);
 
-// auto-learn patterns from this session
+// --- LEARN: meaningful patterns ---
 const modCount = session.modified_files?.length || 0;
-if (modCount > 0) {
-  // record which file patterns were commonly modified together
-  const extensions = [...new Set(session.modified_files.map(f => {
-    const parts = f.split('.');
-    return parts.length > 1 ? parts.pop() : 'unknown';
-  }))];
 
-  if (extensions.length > 0) {
+if (modCount > 0) {
+  // learn file co-modification patterns (which files change together)
+  if (modCount >= 2 && modCount <= 20) {
+    const dirs = [...new Set(session.modified_files.map(f => {
+      const parts = f.split('/');
+      return parts.length > 1 ? parts.slice(0, -1).join('/') : '.';
+    }))];
+    if (dirs.length >= 2) {
+      addMemory('patterns', {
+        type: 'co_modification',
+        directories: dirs,
+        file_count: modCount,
+        session_id: session.session_id
+      });
+    }
+  }
+
+  // learn R:W ratio as a pattern
+  const tc = session.tool_counts;
+  if (tc.write > 0 && tc.read > 0) {
+    const ratio = (tc.read / tc.write).toFixed(1);
     addMemory('patterns', {
-      type: 'file_extensions',
-      extensions,
-      file_count: modCount,
+      type: 'read_write_ratio',
+      ratio: parseFloat(ratio),
+      reads: tc.read,
+      writes: tc.write,
       session_id: session.session_id
     });
   }
 }
 
-// clean up transient state
+// --- cleanup stuck subagents ---
+const subagents = readState('subagents.json', { agents: [] });
+if (subagents?.agents) {
+  const cleaned = subagents.agents.map(a =>
+    a.status === 'running'
+      ? { ...a, status: 'abandoned', abandoned_at: new Date().toISOString() }
+      : a
+  );
+  writeState('subagents.json', { agents: cleaned });
+}
+
+// --- clean up transient state ---
 writeState('compact-state.json', null);
-writeState('subagents.json', { agents: [] });
