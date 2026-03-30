@@ -91,6 +91,25 @@ const TOOLS = [
         }
       }
     }
+  },
+  {
+    name: 'memory_write',
+    description: 'Add an entry to cross-session memory',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['conventions', 'decisions', 'patterns'],
+          description: 'Memory type to write to'
+        },
+        entry: {
+          type: 'object',
+          description: 'Memory entry object (arbitrary key-value pairs)'
+        }
+      },
+      required: ['type', 'entry']
+    }
   }
 ];
 
@@ -155,6 +174,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           all[t] = readJson(`memory/${t}.json`, { entries: [] }).entries.slice(-20);
         }
         return { content: [{ type: 'text', text: JSON.stringify(all, null, 2) }] };
+      }
+
+      case 'memory_write': {
+        const memory = readJson(`memory/${args.type}.json`, { entries: [] });
+        memory.entries.push({ ...args.entry, added_at: new Date().toISOString() });
+        if (memory.entries.length > 100) {
+          memory.entries = memory.entries.slice(-100);
+        }
+        writeJson(`memory/${args.type}.json`, memory);
+        return { content: [{ type: 'text', text: `Added entry to ${args.type} memory. Total: ${memory.entries.length}` }] };
       }
 
       default:
