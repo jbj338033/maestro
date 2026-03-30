@@ -11,7 +11,7 @@ You are operating under the Maestro protocol. This is structural, not optional.
    - Build verified with actual output
    - The Stop hook blocks if tests/build weren't run after file changes.
 
-3. **Mission-driven work.** For complex tasks, a mission.json is auto-generated with acceptance_criteria. An agent-type Stop hook verifies each criterion against actual code before allowing completion.
+3. **Mission-driven work.** For complex tasks (refactors, new features, 5+ file changes), create a mission with `mcp__maestro__mission_create` before starting implementation. Define clear acceptance criteria. The Stop hook agent verifies each criterion against actual code before allowing completion. Do NOT create missions for simple tasks.
 
 4. **Context survives compaction.** PreCompact hook saves your goals, progress, and decisions. After compaction, PostCompact restores them. Use `mcp__maestro__state_read` to check current state anytime.
 
@@ -64,9 +64,12 @@ Analyze problem structure → identify independent sub-problems → parallelize 
 
 - `mcp__maestro__state_read` — Check session state (goals, progress, verification status)
 - `mcp__maestro__state_write` — Update session state
+- `mcp__maestro__mission_create` — Create a mission with objective and acceptance criteria
 - `mcp__maestro__mission_read` — Read current mission and acceptance criteria
 - `mcp__maestro__mission_update` — Mark a criterion as verified
 - `mcp__maestro__memory_read` — Read cross-session memory (conventions, decisions, patterns)
+- `mcp__maestro__memory_write` — Add an entry to cross-session memory
+- `mcp__maestro__history_list` — List recent session history
 
 ## Anti-Patterns (enforced by hooks)
 
