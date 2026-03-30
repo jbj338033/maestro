@@ -1,5 +1,5 @@
 import { readStdin } from './lib/stdin.mjs';
-import { readState, updateState } from './lib/state.mjs';
+import { readState } from './lib/state.mjs';
 
 const input = await readStdin();
 if (!input) process.exit(0);
@@ -13,14 +13,14 @@ if (!session) process.exit(0);
 const counts = session.tool_counts || { read: 0, write: 0, bash: 0, other: 0 };
 const warnings = [];
 
-// track Read:Write ratio
 const isWrite = ['Write', 'Edit'].includes(toolName);
-const isRead = ['Read', 'Glob', 'Grep'].includes(toolName);
 
-if (isWrite && counts.read === 0 && counts.write >= 1) {
-  warnings.push('[Maestro] 아직 파일을 읽지 않았는데 쓰기를 계속하고 있습니다. 관련 파일을 먼저 읽으세요.');
+// warn on first write without any reads
+if (isWrite && counts.read === 0) {
+  warnings.push('[Maestro] 아직 파일을 읽지 않았는데 쓰기를 시도합니다. 관련 파일을 먼저 읽으세요.');
 }
 
+// warn on high write:read ratio
 if (isWrite && counts.write > 0 && counts.read > 0) {
   const ratio = counts.write / counts.read;
   if (ratio >= 3) {
