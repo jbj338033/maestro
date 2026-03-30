@@ -3,12 +3,8 @@
 </h1>
 
 <p align="center">
-  <strong>Thoroughness-first plugin for Claude Code</strong><br/>
-  Hooks, agents, and MCP tools that enforce verification before completion.
-</p>
-
-<p align="center">
-  <a href="README.md">English</a> · <a href="README.ko.md">한국어</a>
+  <strong>Intelligent harness for Claude Code</strong><br/>
+  Amplify, guard, and learn — automatically.
 </p>
 
 <p align="center">
@@ -19,13 +15,11 @@
 
 ## Why
 
-Claude Code is powerful but permissive — it will happily declare "done" without running tests, skip reading files before editing, or ignore the build entirely. Maestro adds structural enforcement so that shortcuts can't slip through.
+Claude Code is powerful but has no memory between sessions, no project awareness at start, and no structural enforcement of quality. Maestro fixes all three — automatically, with zero configuration.
 
-- **Stop gate** blocks completion when tests or builds haven't been run
-- **Read:Write ratio** warns when you're writing more than reading
-- **Mission system** auto-generates acceptance criteria for complex tasks
-- **Context persistence** survives compaction so you never lose progress
-- **Cross-model validation** bridges to Codex and Gemini for second opinions
+- **AMPLIFY** — Scans your project at session start and injects structure, conventions, and past decisions into context
+- **GUARD** — Blocks completion without tests, warns on dangerous patterns, detects circular edits
+- **LEARN** — Auto-captures decisions, commands, and patterns. Every session makes the next one smarter
 
 ## Install
 
@@ -37,52 +31,81 @@ Requires Node.js >= 22 and Claude Code with plugin support.
 
 ## How it works
 
-Maestro hooks into every stage of the Claude Code lifecycle:
+### AMPLIFY — Smarter from the first message
+
+| Feature | How |
+|---------|-----|
+| **Project scan** | SessionStart scans `package.json`, `Cargo.toml`, directory tree → injects language, framework, scripts, entry points |
+| **Memory injection** | Past conventions and decisions are injected as actual content, not just counts |
+| **Learned commands** | Test/build commands from past sessions are surfaced automatically |
+| **Directory context** | When you first read a file in a directory, its README.md is auto-injected |
+
+### GUARD — Mistakes caught automatically
+
+| Feature | How |
+|---------|-----|
+| **Stop gate** | Blocks completion if tests weren't run after file changes |
+| **Verification reset** | `tests_passed` resets when new files are modified after passing |
+| **Circular edit detection** | Warns after 3+ consecutive edits without re-reading |
+| **Test file reminder** | Reminds you when `foo.test.ts` exists for a modified `foo.ts` |
+| **Dangerous patterns** | `git add -A`, force push, `--hard`, `rm -rf`, `--no-verify`, secret exposure |
+| **Mission verification** | Agent verifies acceptance criteria before allowing completion |
+
+### LEARN — Gets smarter over time
+
+| Captured | When | Used |
+|----------|------|------|
+| Package installs | `npm/pnpm install X` | Remembered as decisions |
+| Test commands | `pnpm test`, `cargo test`, etc. | Injected at next session start |
+| Build commands | `pnpm build`, `next build`, etc. | Injected at next session start |
+| Config changes | Edits to `tsconfig.json`, etc. | Remembered as decisions |
+| File co-modification | Which directories change together | Pattern awareness |
+
+## Hooks
 
 | Hook | What it does |
 |------|-------------|
-| **SessionStart** | Initializes session state, restores previous context, loads cross-session memory |
-| **UserPromptSubmit** | Detects complex tasks and auto-generates missions with acceptance criteria |
-| **PreToolUse** | Warns on dangerous patterns (`git add -A`, `rm -rf`) and tracks Read:Write ratio |
-| **PostToolUse** | Counts tool usage, tracks modified files, detects test/build runs |
-| **Stop** | Blocks completion if tests weren't run after file changes |
-| **Stop (agent)** | Verifies mission acceptance criteria against actual code |
-| **PreCompact** | Saves goals, progress, and mission state before context compression |
-| **PostCompact** | Restores saved state after compression |
-| **SubagentStart/Stop** | Tracks active subagents |
-| **SessionEnd** | Saves session history and learns file modification patterns |
+| **SessionStart** | Project scan + memory injection + compact state restore |
+| **PreToolUse** | Dangerous pattern warnings + directory context injection + circular edit detection |
+| **PostToolUse** | File tracking + test/build detection + auto-capture decisions + test file reminders |
+| **Stop** | Verification gate + cross-validation reminder + mission criteria verification |
+| **PreCompact** | Save state + notes + decisions before compression |
+| **PostCompact** | Restore state after compression |
+| **SubagentStart/Stop** | Track active subagents |
+| **SessionEnd** | Save history + learn patterns + cleanup subagents |
 
 ## Agents
 
-Six specialized agents with enforced boundaries:
-
 | Agent | Model | Writes? | Purpose |
 |-------|-------|---------|---------|
-| **researcher** | Sonnet | No | Read-only codebase exploration before implementation |
-| **verifier** | Sonnet | No | Evidence-based verification — every claim needs `command → output` proof |
-| **critic** | Opus | No | Deep review from security, maintainability, and performance perspectives |
-| **codex-bridge** | Sonnet | Yes | Delegates tasks to OpenAI Codex CLI |
-| **gemini-bridge** | Sonnet | Yes | Delegates tasks to Google Gemini CLI |
-| **synthesizer** | Opus | No | Reconciles outputs from multiple models into unified recommendations |
+| **researcher** | Sonnet | No | Read-only codebase exploration |
+| **verifier** | Sonnet | No | Evidence-based verification |
+| **critic** | Opus | No | Security, performance, maintainability review |
+| **codex-bridge** | Sonnet | Yes | Delegates to OpenAI Codex CLI |
+| **gemini-bridge** | Sonnet | Yes | Delegates to Google Gemini CLI |
+| **synthesizer** | Opus | No | Reconciles multi-model outputs |
 
 ## Skills
 
 | Skill | Usage | Description |
 |-------|-------|-------------|
 | **ask** | `/maestro:ask <codex\|gemini> "question"` | Query an external model |
-| **status** | `/maestro:status` | Show session state, mission progress, verification status |
+| **status** | `/maestro:status` | Show session state, mission progress |
+| **setup** | `/maestro:setup` | Install HUD statusline, verify environment |
 
 ## MCP Tools
 
-The Maestro MCP server exposes persistent state across the session:
-
 | Tool | Description |
 |------|-------------|
-| `state_read` | Read session state (goals, progress, tool counts, verification status) |
+| `state_read` | Read session state |
 | `state_write` | Update session state |
-| `mission_read` | Read current mission objective and acceptance criteria |
-| `mission_update` | Mark acceptance criteria as verified or unverified |
-| `memory_read` | Read cross-session memory (conventions, decisions, patterns) |
+| `mission_create` | Create mission with acceptance criteria |
+| `mission_read` | Read current mission |
+| `mission_update` | Mark criteria verified/unverified |
+| `memory_read` | Read cross-session memory |
+| `memory_write` | Add to cross-session memory |
+| `memory_search` | Search memory by keyword |
+| `history_list` | List past session history |
 
 ## Architecture
 
@@ -90,42 +113,31 @@ The Maestro MCP server exposes persistent state across the session:
 maestro/
 ├── .claude-plugin/     # Plugin metadata
 ├── .mcp.json           # MCP server registration
-├── agents/             # Subagent definitions (6 agents)
+├── agents/             # 6 subagent definitions
 ├── hooks/              # Hook event configuration
-├── scripts/            # Hook implementations
-│   ├── lib/            # Shared utilities (state, mission, memory, stdin)
-│   ├── session-start.mjs
-│   ├── prompt-analyze.mjs
-│   ├── pre-tool-guard.mjs
-│   ├── post-tool-audit.mjs
-│   ├── stop-gate.mjs
+├── scripts/
+│   ├── lib/
+│   │   ├── codebase.mjs  # Project scanner (AMPLIFY)
+│   │   ├── state.mjs     # Atomic JSON state
+│   │   ├── mission.mjs   # Mission CRUD
+│   │   ├── memory.mjs    # Cross-session memory
+│   │   ├── stdin.mjs     # Timeout-protected stdin
+│   │   └── xval.mjs      # Codex/Gemini CLI bridges
+│   ├── session-start.mjs   # AMPLIFY: scan + inject
+│   ├── pre-tool-guard.mjs  # GUARD + AMPLIFY: warnings + dir context
+│   ├── post-tool-audit.mjs # GUARD + LEARN: track + capture
+│   ├── stop-gate.mjs       # GUARD: verification gate
+│   ├── auto-xval.mjs       # GUARD: cross-validation reminder
 │   ├── pre-compact-save.mjs
 │   ├── post-compact-restore.mjs
-│   ├── auto-xval.mjs
 │   ├── subagent-track.mjs
-│   ├── session-end.mjs
-│   └── run.cjs         # ESM loader wrapper
+│   ├── session-end.mjs     # LEARN: patterns + cleanup
+│   ├── statusline.mjs      # HUD
+│   └── run.cjs             # ESM loader wrapper
 ├── skills/             # Slash command skills
-├── src/mcp/            # MCP server (stdio transport)
-└── CLAUDE.md           # Thoroughness protocol injected into context
+├── src/mcp/            # MCP server (stdio)
+└── CLAUDE.md           # Protocol injected into context
 ```
-
-## How the stop gate works
-
-```
-Files modified? ──No──→ ✅ Allow
-       │
-      Yes
-       │
-Tests run? ──Yes──→ ✅ Allow
-       │
-       No
-       │
-    ❌ Block
-    "테스트와 빌드를 실행한 후 다시 시도하세요."
-```
-
-The gate blocks once per session — after you run tests and retry, it passes through.
 
 ## License
 
