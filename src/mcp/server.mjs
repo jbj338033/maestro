@@ -115,9 +115,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'state_write': {
         const state = readJson('session.json', {});
         state[args.key] = args.value;
-        const dir = getDataDir();
-        const filepath = join(dir, 'session.json');
-        writeFileSync(filepath, JSON.stringify(state, null, 2), 'utf8');
+        writeJson('session.json', state);
         return { content: [{ type: 'text', text: `Updated state.${args.key}` }] };
       }
 
@@ -139,8 +137,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return { content: [{ type: 'text', text: `Criterion ${args.criteria_id} not found.` }], isError: true };
         }
         criteria.verified = args.verified;
-        const dir = getDataDir();
-        writeFileSync(join(dir, 'mission.json'), JSON.stringify(mission, null, 2), 'utf8');
+        writeJson('mission.json', mission);
         const met = mission.acceptance_criteria.filter(c => c.verified).length;
         const total = mission.acceptance_criteria.length;
         return { content: [{ type: 'text', text: `Criterion ${args.criteria_id} → ${args.verified ? 'VERIFIED' : 'UNVERIFIED'}. Progress: ${met}/${total}` }] };
