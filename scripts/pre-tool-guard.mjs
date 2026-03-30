@@ -28,14 +28,30 @@ if (isWrite && counts.write > 0 && counts.read > 0) {
   }
 }
 
-// dangerous pattern warnings
+// dangerous bash patterns
 if (toolName === 'Bash') {
   const cmd = toolInput.command || '';
+
   if (/git\s+add\s+(-A|\.)\s*$/i.test(cmd)) {
     warnings.push('[Maestro] git add -A는 위험합니다. git status로 먼저 확인하세요.');
   }
-  if (/rm\s+-rf?\s+/i.test(cmd) && !/node_modules|dist|build|\.maestro/i.test(cmd)) {
+  if (/git\s+push\s+.*--force/i.test(cmd) || /git\s+push\s+-f\b/i.test(cmd)) {
+    warnings.push('[Maestro] force push 감지. 원격 브랜치를 덮어쓸 수 있습니다.');
+  }
+  if (/git\s+reset\s+--hard/i.test(cmd)) {
+    warnings.push('[Maestro] git reset --hard 감지. 커밋되지 않은 변경이 모두 사라집니다.');
+  }
+  if (/git\s+checkout\s+\.\s*$/i.test(cmd) || /git\s+restore\s+\.\s*$/i.test(cmd)) {
+    warnings.push('[Maestro] 모든 변경 취소 명령 감지. 작업 중인 변경이 사라질 수 있습니다.');
+  }
+  if (/rm\s+-rf?\s+/i.test(cmd) && !/node_modules|dist|build|\.maestro|\.next|target/i.test(cmd)) {
     warnings.push('[Maestro] rm -rf 감지. 정말 삭제할 대상이 맞는지 확인하세요.');
+  }
+  if (/\benv\b|\bprintenv\b|echo\s+\$\w*(KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL)/i.test(cmd)) {
+    warnings.push('[Maestro] 환경변수/시크릿 노출 가능성. 출력이 컨텍스트에 포함됩니다.');
+  }
+  if (/--no-verify/i.test(cmd)) {
+    warnings.push('[Maestro] --no-verify 감지. git hook을 건너뛰면 검증이 누락됩니다.');
   }
 }
 
