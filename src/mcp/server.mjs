@@ -4,7 +4,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
@@ -110,6 +110,16 @@ const TOOLS = [
       },
       required: ['type', 'entry']
     }
+  },
+  {
+    name: 'history_list',
+    description: 'List recent session history entries',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Max entries to return (default: 10)' }
+      }
+    }
   }
 ];
 
@@ -174,6 +184,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           all[t] = readJson(`memory/${t}.json`, { entries: [] }).entries.slice(-20);
         }
         return { content: [{ type: 'text', text: JSON.stringify(all, null, 2) }] };
+      }
+
+      case 'history_list': {
+        const dir = join(getDataDir(), 'history');
+        if (!existsSync(dir)) {
+          return { content: [{ type: 'text', text: 'No session history yet.' }] };
+        }
+        const files = readdirSync(dir)
+          .filter(f => f.endsWith('.json'))
+          .sort()
+          .reverse()
+          .slice(0, args?.limit || 10);
+        const entries = files.map(f => {
+          try { return JSON.parse(readFileSync(join(dir, f), 'utf8')); }
+          catch { return null; }
+        }).filter(Boolean);
+        if (entries.length === 0) {
+          return { content: [{ type: 'text', text: 'No session history yet.' }] };
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
       }
 
       case 'memory_write': {
