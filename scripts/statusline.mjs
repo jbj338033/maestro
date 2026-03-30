@@ -142,6 +142,17 @@ function main() {
     parts.push(`${t} ${b}`);
   }
 
+  // --- guard level ---
+  if (session?.guard_level && session.guard_level !== 'standard') {
+    const guardColor = { minimal: DIM, strict: YELLOW, maximum: RED }[session.guard_level] || DIM;
+    parts.push(color(`G:${session.guard_level}`, guardColor));
+  }
+
+  // --- intent ---
+  if (session?.intent && session.intent !== 'general') {
+    parts.push(color(session.intent, CYAN));
+  }
+
   // --- mission progress ---
   if (mission?.acceptance_criteria?.length > 0) {
     const total = mission.acceptance_criteria.length;
