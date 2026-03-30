@@ -22,7 +22,7 @@ writeState('session.json', {
     build_passed: null
   },
   external_models_consulted: false,
-  stop_blocked_once: false,
+  stop_blocked_at_file_count: 0,
   compact_count: 0
 });
 
