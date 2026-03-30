@@ -1,0 +1,12 @@
+{
+  "name": "maestro",
+  "version": "0.1.0",
+  "description": "Thoroughness-first orchestrator — verification gates, multi-model teams, context persistence",
+  "author": {
+    "name": "jbj338033"
+  },
+  "agents": "./agents",
+  "skills": "./skills",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json"
+}

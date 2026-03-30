@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "maestro",
+  "description": "Thoroughness-first Claude Code plugin",
+  "owner": {
+    "name": "jbj338033"
+  },
+  "plugins": [
+    {
+      "name": "maestro",
+      "description": "Structural thoroughness enforcement — verification gates, multi-model orchestration (Codex/Gemini), context persistence across compaction, mission-driven workflow",
+      "version": "0.1.0",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
