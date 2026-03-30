@@ -4,9 +4,11 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, readdirSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
 
 function getDataDir() {
   const dir = process.env.CLAUDE_PLUGIN_DATA
@@ -34,7 +36,7 @@ function writeJson(filename, data) {
 }
 
 const server = new Server(
-  { name: 'maestro', version: '0.1.0' },
+  { name: 'maestro', version: '2.0.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -157,7 +159,78 @@ const TOOLS = [
       },
       required: ['objective', 'criteria']
     }
-  }
+  },
+  // v2: checkpoint tools
+  {
+    name: 'checkpoint_create',
+    description: 'Create a checkpoint of current git + session state. Use before risky operations.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Checkpoint name (e.g. "before-refactor")' },
+        description: { type: 'string', description: 'Optional description' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'checkpoint_list',
+    description: 'List all available checkpoints',
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'checkpoint_restore',
+    description: 'Restore to a previous checkpoint (rolls back git + session state)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Checkpoint ID to restore' }
+      },
+      required: ['id']
+    }
+  },
+  // v2: heal tool
+  {
+    name: 'heal_suggest',
+    description: 'Analyze error output and suggest fixes based on past experience',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        error_output: { type: 'string', description: 'Error output to analyze' }
+      },
+      required: ['error_output']
+    }
+  },
+  // v2: proof tool
+  {
+    name: 'proof_report',
+    description: 'Generate test coverage proof report for current changes',
+    inputSchema: { type: 'object', properties: {} }
+  },
+  // v2: global memory tools
+  {
+    name: 'global_memory_read',
+    description: 'Read cross-project global memory (conventions learned across multiple projects)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['conventions', 'tech-profiles', 'anti-patterns'] }
+      }
+    }
+  },
+  {
+    name: 'global_memory_write',
+    description: 'Add an entry to global cross-project memory',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['conventions', 'anti-patterns'] },
+        entry: { type: 'object', description: 'Memory entry' },
+        technologies: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['type', 'entry']
+    }
+  },
 ];
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -291,6 +364,101 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         writeJson(`memory/${args.type}.json`, memory);
         return { content: [{ type: 'text', text: `Added entry to ${args.type} memory. Total: ${memory.entries.length}` }] };
+      }
+
+      case 'checkpoint_create': {
+        const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+        let git_ref = null, git_type = null;
+        try {
+          const stash = execFileSync('git', ['stash', 'create'], { cwd, timeout: 5000, encoding: 'utf8' }).trim();
+          if (stash) { git_ref = stash; git_type = 'stash'; }
+          else { git_ref = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, timeout: 5000, encoding: 'utf8' }).trim(); git_type = 'commit'; }
+        } catch {}
+        const cpId = `cp_${Date.now()}_${randomBytes(3).toString('hex')}`;
+        writeJson(`checkpoints/${cpId}.json`, {
+          id: cpId, name: args.name, description: args.description || '', created_at: new Date().toISOString(),
+          git_ref, git_type, session_snapshot: readJson('session.json'), mission_snapshot: readJson('mission.json'),
+        });
+        return { content: [{ type: 'text', text: `Checkpoint "${args.name}" created (${cpId})${git_ref ? ` at ${git_ref.slice(0, 8)}` : ''}` }] };
+      }
+
+      case 'checkpoint_list': {
+        const cpDir = join(getDataDir(), 'checkpoints');
+        if (!existsSync(cpDir)) return { content: [{ type: 'text', text: 'No checkpoints.' }] };
+        const cps = readdirSync(cpDir).filter(f => f.endsWith('.json')).map(f => {
+          try { return JSON.parse(readFileSync(join(cpDir, f), 'utf8')); } catch { return null; }
+        }).filter(Boolean).sort((a, b) => b.created_at.localeCompare(a.created_at));
+        const text = cps.map(c => `${c.id} | ${c.name} | ${c.created_at}`).join('\n');
+        return { content: [{ type: 'text', text: text || 'No checkpoints.' }] };
+      }
+
+      case 'checkpoint_restore': {
+        const cp = readJson(`checkpoints/${args.id}.json`);
+        if (!cp) return { content: [{ type: 'text', text: 'Checkpoint not found.' }], isError: true };
+        const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+        try {
+          if (cp.git_type === 'stash') execFileSync('git', ['stash', 'apply', cp.git_ref], { cwd, timeout: 10000 });
+          else if (cp.git_type === 'commit') execFileSync('git', ['checkout', cp.git_ref, '--', '.'], { cwd, timeout: 10000 });
+        } catch (e) {
+          return { content: [{ type: 'text', text: `Git restore failed: ${e.message}` }], isError: true };
+        }
+        if (cp.session_snapshot) {
+          const cur = readJson('session.json', {});
+          writeJson('session.json', { ...cp.session_snapshot, session_id: cur.session_id, started_at: cur.started_at });
+        }
+        if (cp.mission_snapshot) writeJson('mission.json', cp.mission_snapshot);
+        return { content: [{ type: 'text', text: `Restored to checkpoint "${cp.name}"` }] };
+      }
+
+      case 'heal_suggest': {
+        const healRe = [
+          { re: /(.+\.tsx?)\((\d+),\d+\): error (TS\d+): (.+)/g, fmt: m => `TS ${m[3]} in ${m[1]}:${m[2]}: ${m[4]}` },
+          { re: /^error:?\s*(.+)/gim, fmt: m => m[1] },
+        ];
+        const errs = [];
+        for (const p of healRe) {
+          p.re.lastIndex = 0;
+          let m; while ((m = p.re.exec(args.error_output)) !== null && errs.length < 5) errs.push(p.fmt(m));
+        }
+        const errDb = readJson('memory/errors.json', { entries: [] });
+        const fixes = errDb.entries.slice(-5).map(e => `  - ${e.error_type}: fixed in ${e.fix_files?.join(', ')}`);
+        let healText = errs.length ? `Errors found:\n${errs.map(e => `  - ${e}`).join('\n')}` : 'No structured errors detected.';
+        if (fixes.length) healText += `\n\nKnown fixes:\n${fixes.join('\n')}`;
+        return { content: [{ type: 'text', text: healText }] };
+      }
+
+      case 'proof_report': {
+        const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+        let diff = '';
+        try { diff = execFileSync('git', ['diff', 'HEAD'], { cwd, timeout: 5000, encoding: 'utf8' }); } catch {}
+        if (!diff) return { content: [{ type: 'text', text: 'No changes detected (no git diff).' }] };
+        return { content: [{ type: 'text', text: `Git diff available (${diff.length} bytes). Use stop gate for full proof analysis.` }] };
+      }
+
+      case 'global_memory_read': {
+        const gDir = join(homedir(), '.maestro', 'global');
+        if (!existsSync(gDir)) return { content: [{ type: 'text', text: 'No global memory yet.' }] };
+        const gType = args?.type || 'conventions';
+        const gPath = join(gDir, `${gType}.json`);
+        if (!existsSync(gPath)) return { content: [{ type: 'text', text: `No ${gType} in global memory.` }] };
+        try {
+          const gData = JSON.parse(readFileSync(gPath, 'utf8'));
+          return { content: [{ type: 'text', text: JSON.stringify(gData.entries?.slice(-20) || gData, null, 2) }] };
+        } catch { return { content: [{ type: 'text', text: 'Error reading global memory.' }], isError: true }; }
+      }
+
+      case 'global_memory_write': {
+        const gDir = join(homedir(), '.maestro', 'global');
+        if (!existsSync(gDir)) mkdirSync(gDir, { recursive: true });
+        const gPath = join(gDir, `${args.type}.json`);
+        let gData = { entries: [] };
+        try { if (existsSync(gPath)) gData = JSON.parse(readFileSync(gPath, 'utf8')); } catch {}
+        gData.entries.push({ ...args.entry, technologies: args.technologies, added_at: new Date().toISOString() });
+        if (gData.entries.length > 200) gData.entries = gData.entries.slice(-200);
+        const gTmp = gPath + '.' + randomBytes(4).toString('hex') + '.tmp';
+        writeFileSync(gTmp, JSON.stringify(gData, null, 2), 'utf8');
+        renameSync(gTmp, gPath);
+        return { content: [{ type: 'text', text: `Added to global ${args.type}. Total: ${gData.entries.length}` }] };
       }
 
       default:
