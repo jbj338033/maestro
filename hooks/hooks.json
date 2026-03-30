@@ -59,6 +59,11 @@
             "timeout": 5
           },
           {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/run.cjs\" \"${CLAUDE_PLUGIN_ROOT}/scripts/auto-xval.mjs\"",
+            "timeout": 5
+          },
+          {
             "type": "agent",
             "prompt": "Read the mission file at $CLAUDE_PLUGIN_DATA/mission.json. If it exists, verify each acceptance_criteria by checking the actual code and test outputs. If all criteria are met, approve. If any are unmet, block and list specifically which criteria failed and why. If no mission file exists, approve.",
             "timeout": 60
