@@ -1,80 +1,87 @@
-# Maestro — Thoroughness Protocol
+# Maestro — Intelligent Harness Protocol
 
 You are operating under the Maestro protocol. This is structural, not optional.
 
+## Three Pillars
+
+### AMPLIFY — You start every session smarter
+
+Maestro automatically injects context at session start:
+- **Project scan**: language, framework, structure, scripts, entry points
+- **Past conventions**: learned rules from previous sessions
+- **Past decisions**: what was decided and why
+- **Learned commands**: which test/build commands work for this project
+
+When you read files in a new directory, Maestro auto-injects README.md or ARCHITECTURE.md from that directory. You don't need to search for them.
+
+### GUARD — Mistakes are caught automatically
+
+- **Read before Write**: warns when writing without reading first
+- **Circular edit detection**: warns after 3+ consecutive edits to the same file without re-reading
+- **Test file reminders**: when you modify `foo.ts`, reminds you if `foo.test.ts` exists
+- **Verification reset**: `tests_passed` resets when new files are modified after tests pass
+- **Stop gate**: blocks completion if tests/build weren't run after file changes
+- **Dangerous patterns**: warns on `git add -A`, force push, `reset --hard`, `rm -rf`, `--no-verify`, secret exposure
+- **Mission verification**: agent hook verifies acceptance criteria before allowing completion
+
+### LEARN — Every session makes the next one better
+
+Maestro auto-captures without any manual action:
+- Package installs → remembered as decisions
+- Test/build commands → remembered for next session injection
+- Config changes → remembered as decisions
+- File co-modification patterns → remembered for awareness
+- Read:Write ratios → tracked across sessions
+
 ## Core Rules
 
-1. **Read before Write.** Before modifying any file, read it and at least 2 related files (callers, tests, types). The PreToolUse hook tracks your Read:Write ratio and warns if you write without reading.
+1. **Read before Write.** Read the file and at least 2 related files before modifying. The hook warns if you write without reading.
 
-2. **Verify before declaring done.** Every completion must have fresh evidence:
-   - Tests executed with actual output (not "tests should pass")
-   - Build verified with actual output
-   - The Stop hook blocks if tests/build weren't run after file changes.
+2. **Verify before done.** Run tests with actual output. Run build if 3+ files modified. The Stop hook blocks without evidence.
 
-3. **Mission-driven work.** For complex tasks (refactors, new features, 5+ file changes), create a mission with `mcp__maestro__mission_create` before starting implementation. Define clear acceptance criteria. The Stop hook agent verifies each criterion against actual code before allowing completion. Do NOT create missions for simple tasks.
+3. **Missions for complex work.** For refactors, new features, or 5+ file changes, create a mission:
+   ```
+   mcp__maestro__mission_create({
+     objective: "what you're building",
+     criteria: ["tests pass", "build succeeds", "no regressions"]
+   })
+   ```
+   The Stop hook agent verifies each criterion. Do NOT create missions for simple tasks.
 
-4. **Context survives compaction.** PreCompact hook saves your goals, progress, and decisions. After compaction, PostCompact restores them. Use `mcp__maestro__state_read` to check current state anytime.
+4. **Context survives compaction.** PreCompact saves goals, progress, notes, and decisions. After compaction, use `mcp__maestro__state_read` to check current state.
 
 ## When to Use External Models
 
-You have access to `codex-bridge` and `gemini-bridge` agents. Use them when:
+Use `codex-bridge` and `gemini-bridge` agents when:
+- **5+ files modified**: second opinion before completing
+- **Math/logic problems**: delegate to gemini-bridge
+- **Code implementation**: delegate to codex-bridge
+- **Conflicting approaches**: run both, then use synthesizer
+- **You're unsure**: another model catches blind spots
 
-- **5+ files modified**: Get a second opinion via codex-bridge or gemini-bridge before completing
-- **Math/logic problems**: Delegate to gemini-bridge (Gemini excels at mathematical reasoning)
-- **Code implementation tasks**: Delegate to codex-bridge (Codex excels at code generation)
-- **Conflicting approaches**: Run both, then use synthesizer to reconcile
-- **You're unsure**: A second model's perspective catches blind spots
+Skip for trivial tasks (typo fixes, single-line changes).
 
-Do NOT use external models for trivial tasks (typo fixes, single-line changes).
+## MCP Tools
 
-## Strategy by Task Scale
-
-### Small (1-2 files)
-Implement directly → run tests → done.
-
-### Medium (3-5 files)
-Use researcher agent to explore first → implement → use verifier agent → consider codex-bridge/gemini-bridge review.
-
-### Large (5+ files, refactoring, new features)
-Check mission.json acceptance criteria → researcher → implement → verifier → critic (Opus deep review) → codex-bridge + gemini-bridge cross-validation → synthesizer to merge perspectives.
-
-### Problem Solving (challenges, puzzles, aitop100)
-Analyze problem structure → identify independent sub-problems → parallelize with agents where possible → math/logic to gemini-bridge → code to codex-bridge → synthesize → verify against problem constraints.
-
-## Model Strengths (delegation guide)
-
-| Model | Best at |
-|-------|---------|
-| **Codex** | Code implementation, refactoring, debugging, test writing |
-| **Gemini** | Math, logic, long-context analysis, multimodal, structured reasoning |
-| **Claude (you)** | Design, complex reasoning, judgment, orchestration, nuanced decisions |
+| Tool | Purpose |
+|------|---------|
+| `state_read` | read session state (progress, verification, notes) |
+| `state_write` | update session state (use for notes, custom flags) |
+| `mission_create` | create mission with acceptance criteria |
+| `mission_read` | read current mission |
+| `mission_update` | mark criterion as verified |
+| `memory_read` | read cross-session memory (conventions, decisions, patterns) |
+| `memory_write` | add to cross-session memory |
+| `memory_search` | search memory by keyword |
+| `history_list` | list past session summaries |
 
 ## Agent Roster
 
 | Agent | Model | Writes? | When |
 |-------|-------|---------|------|
-| researcher | Sonnet | No | Before implementing to understand codebase |
-| verifier | Sonnet | No | After implementing to confirm with evidence |
-| critic | Opus | No | Significant changes or architecture decisions |
-| codex-bridge | Sonnet | Yes | Second opinion, code tasks, cross-validation |
-| gemini-bridge | Sonnet | Yes | Math/logic tasks, cross-validation |
-| synthesizer | Opus | No | Merging multiple model outputs |
-
-## MCP Tools
-
-- `mcp__maestro__state_read` — Check session state (goals, progress, verification status)
-- `mcp__maestro__state_write` — Update session state
-- `mcp__maestro__mission_create` — Create a mission with objective and acceptance criteria
-- `mcp__maestro__mission_read` — Read current mission and acceptance criteria
-- `mcp__maestro__mission_update` — Mark a criterion as verified
-- `mcp__maestro__memory_read` — Read cross-session memory (conventions, decisions, patterns)
-- `mcp__maestro__memory_write` — Add an entry to cross-session memory
-- `mcp__maestro__history_list` — List recent session history
-
-## Anti-Patterns (enforced by hooks)
-
-- Declaring "done" without running tests → **BLOCKED by Stop hook**
-- Writing 5+ files without reading → **WARNING injected**
-- Mission criteria unmet at completion → **BLOCKED by agent hook**
-- "Tests should pass" without output → **BLOCKED**
-- `git add -A` without `git status` → **WARNING**
+| researcher | Sonnet | No | before implementing, to understand codebase |
+| verifier | Sonnet | No | after implementing, to confirm with evidence |
+| critic | Opus | No | significant changes or architecture decisions |
+| codex-bridge | Sonnet | Yes | second opinion, code tasks |
+| gemini-bridge | Sonnet | Yes | math/logic tasks |
+| synthesizer | Opus | No | merging multiple model outputs |
