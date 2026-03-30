@@ -8,6 +8,10 @@
 </p>
 
 <p align="center">
+  <a href="README.md">English</a> · <a href="README.ko.md">한국어</a>
+</p>
+
+<p align="center">
   <a href="#install">Install</a> · <a href="#how-it-works">How it works</a> · <a href="#agents">Agents</a> · <a href="#skills">Skills</a> · <a href="#mcp-tools">MCP Tools</a>
 </p>
 
