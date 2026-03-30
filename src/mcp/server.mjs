@@ -87,10 +87,9 @@ const TOOLS = [
         type: {
           type: 'string',
           enum: ['conventions', 'decisions', 'patterns'],
-          description: 'Memory type to read'
+          description: 'Memory type to read. Omit to read all.'
         }
-      },
-      required: ['type']
+      }
     }
   }
 ];
@@ -144,11 +143,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'memory_read': {
-        const memory = readJson(`memory/${args.type}.json`, { entries: [] });
-        if (memory.entries.length === 0) {
-          return { content: [{ type: 'text', text: `No ${args.type} memories yet.` }] };
+        if (args?.type) {
+          const memory = readJson(`memory/${args.type}.json`, { entries: [] });
+          if (memory.entries.length === 0) {
+            return { content: [{ type: 'text', text: `No ${args.type} memories yet.` }] };
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(memory.entries.slice(-20), null, 2) }] };
         }
-        return { content: [{ type: 'text', text: JSON.stringify(memory.entries.slice(-20), null, 2) }] };
+        const all = {};
+        for (const t of ['conventions', 'decisions', 'patterns']) {
+          all[t] = readJson(`memory/${t}.json`, { entries: [] }).entries.slice(-20);
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(all, null, 2) }] };
       }
 
       default:
