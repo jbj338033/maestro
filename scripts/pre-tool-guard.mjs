@@ -1,5 +1,7 @@
 import { readStdin } from './lib/stdin.mjs';
-import { readState } from './lib/state.mjs';
+import { readState, updateState } from './lib/state.mjs';
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const input = await readStdin();
 if (!input) process.exit(0);
@@ -12,15 +14,17 @@ if (!session) process.exit(0);
 
 const counts = session.tool_counts || { read: 0, write: 0, bash: 0, other: 0 };
 const warnings = [];
+let additionalContext = null;
 
 const isWrite = ['Write', 'Edit'].includes(toolName);
+const isRead = toolName === 'Read';
 
-// warn on first write without any reads
+// --- GUARD: write without read ---
 if (isWrite && counts.read === 0) {
   warnings.push('[Maestro] attempting to write without reading any files first. read related files before writing.');
 }
 
-// warn on high write:read ratio
+// --- GUARD: high write:read ratio ---
 if (isWrite && counts.write > 0 && counts.read > 0) {
   const ratio = counts.write / counts.read;
   if (ratio >= 3) {
@@ -28,7 +32,66 @@ if (isWrite && counts.write > 0 && counts.read > 0) {
   }
 }
 
-// dangerous bash patterns
+// --- GUARD: circular edit detection ---
+if (isWrite && toolInput.file_path) {
+  const fp = toolInput.file_path;
+  const edits = session.consecutive_edits || {};
+  const count = (edits[fp] || 0) + 1;
+
+  if (count >= 3) {
+    warnings.push(`[Maestro] ${count} consecutive edits to ${fp} without re-reading. consider reading the file to verify your changes.`);
+  }
+
+  // update consecutive edit count
+  updateState('session.json', (s) => {
+    if (!s.consecutive_edits) s.consecutive_edits = {};
+    s.consecutive_edits[fp] = count;
+    return s;
+  });
+}
+
+// --- GUARD: reset consecutive edits on read ---
+if (isRead && toolInput.file_path) {
+  const fp = toolInput.file_path;
+  const edits = session.consecutive_edits || {};
+  if (edits[fp]) {
+    updateState('session.json', (s) => {
+      if (s.consecutive_edits) delete s.consecutive_edits[fp];
+      return s;
+    });
+  }
+}
+
+// --- AMPLIFY: directory context injection ---
+if (isRead && toolInput.file_path) {
+  const dir = dirname(toolInput.file_path);
+  const injectedDirs = session.injected_dirs || [];
+
+  if (!injectedDirs.includes(dir)) {
+    const contextFiles = ['README.md', 'ARCHITECTURE.md', 'readme.md'];
+    for (const name of contextFiles) {
+      const contextPath = join(dir, name);
+      if (existsSync(contextPath)) {
+        try {
+          const content = readFileSync(contextPath, 'utf8');
+          // cap at 2000 chars to avoid flooding context
+          const trimmed = content.length > 2000 ? content.slice(0, 2000) + '\n...(truncated)' : content;
+          additionalContext = `[Maestro] directory context from ${name}:\n${trimmed}`;
+        } catch { /* ignore */ }
+        break;
+      }
+    }
+
+    // mark as injected regardless of whether a file was found
+    updateState('session.json', (s) => {
+      if (!s.injected_dirs) s.injected_dirs = [];
+      s.injected_dirs.push(dir);
+      return s;
+    });
+  }
+}
+
+// --- GUARD: dangerous bash patterns ---
 if (toolName === 'Bash') {
   const cmd = toolInput.command || '';
 
@@ -55,12 +118,17 @@ if (toolName === 'Bash') {
   }
 }
 
-if (warnings.length > 0) {
-  const output = {
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      additionalContext: warnings.join('\n')
-    }
+// build output
+const output = {};
+const contextParts = [];
+
+if (warnings.length > 0) contextParts.push(warnings.join('\n'));
+if (additionalContext) contextParts.push(additionalContext);
+
+if (contextParts.length > 0) {
+  output.hookSpecificOutput = {
+    hookEventName: 'PreToolUse',
+    additionalContext: contextParts.join('\n\n')
   };
   process.stdout.write(JSON.stringify(output));
 }
