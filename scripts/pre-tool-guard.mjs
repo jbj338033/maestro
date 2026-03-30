@@ -1,7 +1,10 @@
 import { readStdin } from './lib/stdin.mjs';
 import { readState, updateState } from './lib/state.mjs';
 import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, basename } from 'node:path';
+import { assessFileRisk, getGuardLevel, getCircularEditThreshold } from './lib/risk.mjs';
+import { predictNextFiles } from './lib/predict.mjs';
+import { detectIntentFromTool, configureSession } from './lib/intent.mjs';
 
 const input = await readStdin();
 if (!input) process.exit(0);
@@ -19,6 +22,34 @@ let additionalContext = null;
 const isWrite = ['Write', 'Edit'].includes(toolName);
 const isRead = toolName === 'Read';
 
+// --- INTENT: detect on first tool use ---
+if (!session.intent_detected) {
+  try {
+    const result = detectIntentFromTool(toolName, toolInput);
+    if (result.confidence > 0) {
+      const config = configureSession(result.intent);
+      updateState('session.json', (s) => {
+        s.intent_detected = true;
+        s.intent = result.intent;
+        s.intent_confidence = result.confidence;
+        s.guard_level = config.guard_level_override;
+        s.suggested_agents = config.suggested_agents;
+        return s;
+      });
+      warnings.push(`[Maestro] detected intent: ${result.intent}. ${config.context_message}`);
+      if (config.suggested_agents.length > 0) {
+        warnings.push(`[Maestro] suggested agents: ${config.suggested_agents.join(', ')}`);
+      }
+    } else {
+      updateState('session.json', (s) => {
+        s.intent_detected = true;
+        s.intent = 'general';
+        return s;
+      });
+    }
+  } catch {}
+}
+
 // --- GUARD: write without read ---
 if (isWrite && counts.read === 0) {
   warnings.push('[Maestro] attempting to write without reading any files first. read related files before writing.');
@@ -32,22 +63,36 @@ if (isWrite && counts.write > 0 && counts.read > 0) {
   }
 }
 
-// --- GUARD: circular edit detection ---
+// --- GUARD: adaptive circular edit detection ---
 if (isWrite && toolInput.file_path) {
   const fp = toolInput.file_path;
+  const riskProfiles = readState('memory/risk-profiles.json', { directories: {} });
+  const guardLevel = getGuardLevel(fp, riskProfiles);
+  const threshold = getCircularEditThreshold(guardLevel);
   const edits = session.consecutive_edits || {};
   const count = (edits[fp] || 0) + 1;
 
-  if (count >= 3) {
-    warnings.push(`[Maestro] ${count} consecutive edits to ${fp} without re-reading. consider reading the file to verify your changes.`);
+  if (count >= threshold) {
+    const risk = assessFileRisk(fp);
+    warnings.push(`[Maestro] ${count} consecutive edits to ${fp} (risk: ${risk.level}). consider reading the file to verify.`);
   }
 
-  // update consecutive edit count
   updateState('session.json', (s) => {
     if (!s.consecutive_edits) s.consecutive_edits = {};
     s.consecutive_edits[fp] = count;
     return s;
   });
+
+  // --- GUARD: high-risk file without reading tests ---
+  const risk = assessFileRisk(fp);
+  if (risk.score >= 3) {
+    const readFiles = session.read_files || [];
+    const nameNoExt = basename(fp).replace(/\.[^.]+$/, '');
+    const hasReadTests = readFiles.some(f => f.includes(nameNoExt) && /test|spec/i.test(f));
+    if (!hasReadTests) {
+      warnings.push(`[Maestro] writing to ${risk.level}-risk file without reading related tests.`);
+    }
+  }
 }
 
 // --- GUARD: reset consecutive edits on read ---
@@ -74,21 +119,36 @@ if (isRead && toolInput.file_path) {
       if (existsSync(contextPath)) {
         try {
           const content = readFileSync(contextPath, 'utf8');
-          // cap at 2000 chars to avoid flooding context
           const trimmed = content.length > 2000 ? content.slice(0, 2000) + '\n...(truncated)' : content;
           additionalContext = `[Maestro] directory context from ${name}:\n${trimmed}`;
-        } catch { /* ignore */ }
+        } catch {}
         break;
       }
     }
 
-    // mark as injected regardless of whether a file was found
     updateState('session.json', (s) => {
       if (!s.injected_dirs) s.injected_dirs = [];
       s.injected_dirs.push(dir);
       return s;
     });
   }
+}
+
+// --- AMPLIFY: predictive context ---
+if ((isRead || isWrite) && toolInput.file_path) {
+  try {
+    const predictions = predictNextFiles(
+      toolInput.file_path,
+      session.read_files || [],
+      session.modified_files || [],
+    );
+    if (predictions.length > 0) {
+      const label = isRead ? 'related files you may need' : 'files that usually change with this one';
+      const lines = predictions.map(p => `  - ${p.path} (${p.reason})`);
+      const ctx = `[Maestro] ${label}:\n${lines.join('\n')}`;
+      additionalContext = additionalContext ? additionalContext + '\n\n' + ctx : ctx;
+    }
+  } catch {}
 }
 
 // --- GUARD: dangerous bash patterns ---
